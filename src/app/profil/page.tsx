@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/supabase/server";
 import { loadEvents } from "@/lib/me";
-import { CsvImport, LetterboxdLink } from "@/components/ProfileTools";
+import { CsvImport, DeleteData, LetterboxdLink } from "@/components/ProfileTools";
 
 export const metadata = { title: "Mon profil · Clap & Play" };
 
@@ -53,6 +53,15 @@ async function ProfileContent() {
       </div>
 
       <Link href="/" className="btn btn-primary">🎬 Trouver un film</Link>
+
+      <div className="panel danger-zone" style={{ marginTop: 40 }}>
+        <h2>Tes données</h2>
+        <p>
+          Voir les <Link href="/confidentialite">règles de confidentialité</Link>. Tu peux effacer à tout moment tout
+          ce que Clap &amp; Play a enregistré sur toi.
+        </p>
+        <DeleteData />
+      </div>
     </div>
   );
 }

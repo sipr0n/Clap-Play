@@ -61,6 +61,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <a href="https://www.themoviedb.org" target="_blank" rel="noreferrer">TMDB</a> et{" "}
             <a href="https://www.justwatch.com" target="_blank" rel="noreferrer">JustWatch</a>. Ce produit utilise
             l&apos;API TMDB mais n&apos;est ni approuvé ni certifié par TMDB.
+            <div className="footer-links">
+              <Link href="/confidentialite">Confidentialité</Link>
+              <Link href="/conditions">Conditions d&apos;utilisation</Link>
+            </div>
           </div>
         </footer>
       </body>

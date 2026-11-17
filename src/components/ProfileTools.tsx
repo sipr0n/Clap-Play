@@ -105,3 +105,48 @@ export function CsvImport() {
     </>
   );
 }
+
+export function DeleteData() {
+  const [step, setStep] = useState<"idle" | "confirm" | "busy">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  async function remove() {
+    setStep("busy");
+    setError(null);
+    const res = await fetch("/api/me/data", { method: "DELETE" });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "La suppression a échoué. Réessaie.");
+      setStep("confirm");
+      return;
+    }
+    // Rechargement complet voulu : l'en-tête doit refléter la déconnexion.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+    window.location.href = "/";
+  }
+
+  if (step === "idle") {
+    return (
+      <button className="btn btn-danger" onClick={() => setStep("confirm")}>
+        Supprimer mes données
+      </button>
+    );
+  }
+  return (
+    <>
+      <p style={{ color: "var(--text)" }}>
+        Tes films, tes notes, ton lien Letterboxd et tes abonnements seront effacés, puis tu seras déconnecté. Cette
+        action est définitive.
+      </p>
+      <div className="row">
+        <button className="btn btn-danger" onClick={remove} disabled={step === "busy"}>
+          {step === "busy" ? "Suppression…" : "Oui, tout supprimer"}
+        </button>
+        <button className="btn btn-ghost" onClick={() => setStep("idle")} disabled={step === "busy"}>
+          Annuler
+        </button>
+      </div>
+      {error && <p className="error" role="alert" style={{ marginTop: 10, marginBottom: 0 }}>{error}</p>}
+    </>
+  );
+}
