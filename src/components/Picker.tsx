@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import Logo from "@/components/Logo";
 import { Film, MOODS, PROVIDERS, TIMES } from "@/lib/options";
 
 type Props = {
@@ -142,6 +143,7 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
   return (
     <>
       <section className="hero">
+        <Logo size={190} className="hero-logo" />
         <h1>
           Indécis ? <em>3 films</em> pour ce soir.
         </h1>

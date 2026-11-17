@@ -17,7 +17,7 @@ async function LoginState({ searchParams }: { searchParams: PageProps<"/connexio
 export default function Connexion({ searchParams }: PageProps<"/connexion">) {
   return (
     <div className="login-box">
-      <Logo size={56} />
+      <Logo size={140} />
       <h1 style={{ margin: "16px 0 8px" }}>Bienvenue !</h1>
       <p className="lead">
         Connecte-toi pour enregistrer tes abonnements, lier ton Letterboxd et recevoir des propositions selon tes

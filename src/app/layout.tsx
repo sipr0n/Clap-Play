@@ -4,6 +4,7 @@ import Link from "next/link";
 import Logo from "@/components/Logo";
 import { getUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import "@fontsource/pacifico/400.css";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -42,7 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           <div className="container header-inner">
             <Link href="/" className="logo">
               <Logo />
-              <span>
+              <span className="logo-name">
                 Clap <span className="amp">&amp;</span> Play
               </span>
             </Link>
