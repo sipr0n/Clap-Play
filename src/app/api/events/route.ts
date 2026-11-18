@@ -2,7 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { MOODS, ERAS } from "@/lib/options";
 
 const ACTIONS = ["shown", "trailer", "watch", "letterboxd", "liked", "seen", "disliked"];
-const REASONS = ["similar", "director", "taste", "acclaimed", "classic", "recent", "rated", "critics"];
+const REASONS = ["similar", "director", "actor", "taste", "acclaimed", "classic", "recent", "rated", "critics"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 type Incoming = {

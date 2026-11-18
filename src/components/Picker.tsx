@@ -21,6 +21,7 @@ type Feedback = "seen" | "liked" | "disliked";
 const REASON_ICON: Record<Reason["kind"], string> = {
   similar: "💛",
   director: "🎬",
+  actor: "⭐",
   taste: "🎯",
   acclaimed: "🏆",
   classic: "🎞️",
@@ -74,6 +75,7 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
   const [personalized, setPersonalized] = useState(false);
   const [feedback, setFeedback] = useState<Record<number, Feedback>>({});
   const [searched, setSearched] = useState(false);
+  const [exhausted, setExhausted] = useState(false); // plus aucun film pour ces critères après « 3 autres films »
   const [toast, setToast] = useState<string | null>(null);
   const [trailer, setTrailer] = useState<{ title: string; key: string; lang: TrailerLang } | null>(null);
   const shown = useRef<Set<number>>(new Set());
@@ -158,6 +160,7 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
       searchId.current = crypto.randomUUID();
       list.forEach((f, i) => track(f, "shown", i + 1));
       setFilms(list);
+      setExhausted(again && list.length === 0);
       setFeedback({});
       setSearched(true);
       requestAnimationFrame(() => resultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
@@ -347,10 +350,22 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
           )}
 
           {films.length === 0 ? (
-            <p className="notice">
-              Aucun film ne correspond. Essaie un autre style, plus de temps, une autre époque, ou ajoute un
-              abonnement dans tes préférences.
-            </p>
+            exhausted ? (
+              <div className="notice">
+                <p style={{ margin: "0 0 10px" }}>
+                  <strong>Tu as fait le tour</strong> des films qui correspondent à ces critères. Change de style, de
+                  temps ou d&apos;époque, ou recommence depuis le début.
+                </p>
+                <button className="btn btn-sm" onClick={() => findFilms(false)} disabled={loading}>
+                  ↺ Recommencer
+                </button>
+              </div>
+            ) : (
+              <p className="notice">
+                Aucun film ne correspond. Essaie un autre style, plus de temps, une autre époque, ou ajoute un
+                abonnement dans tes préférences.
+              </p>
+            )
           ) : (
             <>
             {films.length < 3 && (
