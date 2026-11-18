@@ -165,7 +165,7 @@ export function scoreFilm(f: ScoreInput, taste: Taste | null, now = new Date()):
   const publicStrong = reasons.some((r) => ["classic", "acclaimed", "recent", "trending"].includes(r.kind)) ||
     (reliable >= 6.9 && f.votes >= 1000);
   const tier: Scored["tier"] =
-    reliable < 6.4 || affinity <= -0.6 // trop faible, ou genres que l'utilisateur n'aime pas
+    reliable < 6.4 || f.rating < 6.5 || affinity <= -0.6 // trop faible, ou genres que l'utilisateur n'aime pas
       ? "none"
       : publicStrong || (personal && reliable >= 6.6)
         ? "strong"

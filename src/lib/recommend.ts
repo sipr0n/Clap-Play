@@ -17,7 +17,10 @@ export type RecommendParams = {
   taste?: Taste | null; // goûts de l'utilisateur connecté
 };
 
-export type RecommendResult = { films: Film[]; demo: boolean; personalized: boolean };
+// Pourquoi il y a peu de films : ce que la recherche a trouvé et écarté (films distincts).
+export type SearchStats = { found: number; inHistory: number; alreadyShown: number; weak: number };
+
+export type RecommendResult = { films: Film[]; demo: boolean; personalized: boolean; stats?: SearchStats };
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -82,7 +85,7 @@ async function availability(id: number, providerIds: number[]) {
   return { ids, link: region?.link ?? null };
 }
 
-async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
+async function recommendFromTmdb(p: RecommendParams): Promise<{ films: Film[]; stats: SearchStats }> {
   const time = TIMES.find((t) => t.id === p.timeId) ?? TIMES[TIMES.length - 1];
   const count = p.count ?? 3;
   const taste = p.taste ?? null;
@@ -112,8 +115,17 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
 
   // Candidats, notés et justifiés au fur et à mesure.
   const byId = new Map<number, Candidate>();
+  const history = new Set([...(taste?.seen ?? []), ...(taste?.disliked ?? [])]);
+  const shownBefore = new Set(p.exclude ?? []);
+  const found = new Set<number>();
+  const inHistory = new Set<number>();
+  const alreadyShown = new Set<number>();
   const add = (m: TmdbMovie, rank: number, similarTo: string | null, trendingRank: number | null = null) => {
-    if (excluded.has(m.id) || !matchesGenres(m.genre_ids ?? [], groups, avoid)) return;
+    if (!matchesGenres(m.genre_ids ?? [], groups, avoid)) return;
+    found.add(m.id);
+    if (history.has(m.id)) inHistory.add(m.id);
+    else if (shownBefore.has(m.id)) alreadyShown.add(m.id);
+    if (excluded.has(m.id)) return;
     const prev = byId.get(m.id);
     const popularityRank = Math.min(rank, prev?.popularityRank ?? rank);
     const sim = similarTo ?? prev?.similarTo ?? null;
@@ -299,7 +311,7 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
   // 4) Seuls les films justifiés sont proposés, les mieux classés ayant le plus de chances.
   const picks = pickJustified([...byId.values()], count);
 
-  return Promise.all(
+  const films = await Promise.all(
     picks.map(async (f) => {
       const [av, detail] = await Promise.all([
         availability(f.id, p.providerIds),
@@ -326,6 +338,11 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
       } satisfies Film;
     }),
   );
+  const weak = [...byId.values()].filter((c) => c.scored.tier === "none").length;
+  return {
+    films,
+    stats: { found: found.size, inHistory: inHistory.size, alreadyShown: alreadyShown.size, weak },
+  };
 }
 
 // ---------- Mode démo (sans clé TMDB) ----------
@@ -381,5 +398,6 @@ function recommendFromDemo(p: RecommendParams): Film[] {
 export async function recommend(p: RecommendParams): Promise<RecommendResult> {
   const personalized = Boolean(p.taste && (p.taste.seen.size > 0 || p.taste.disliked.size > 0));
   if (!hasTmdb()) return { films: recommendFromDemo(p), demo: true, personalized };
-  return { films: await recommendFromTmdb(p), demo: false, personalized };
+  const { films, stats } = await recommendFromTmdb(p);
+  return { films, demo: false, personalized, stats };
 }

@@ -48,6 +48,21 @@ const store = {
   },
 };
 
+type SearchStats = { found: number; inHistory: number; alreadyShown: number; weak: number };
+
+// « Sur 37 films trouvés dans tes abonnements : 21 dans ton historique, 12 trop peu appréciés. »
+function explainStats(st: SearchStats | null): string | null {
+  if (!st || st.found === 0) return null;
+  const s = (n: number) => (n > 1 ? "s" : "");
+  const parts = [
+    st.inHistory ? `${st.inHistory} dans ton historique (déjà vu${s(st.inHistory)} ou écarté${s(st.inHistory)})` : null,
+    st.alreadyShown ? `${st.alreadyShown} déjà proposé${s(st.alreadyShown)}` : null,
+    st.weak ? `${st.weak} trop peu apprécié${s(st.weak)} pour être recommandé${s(st.weak)}` : null,
+  ].filter(Boolean);
+  if (!parts.length) return null;
+  return `Sur ${st.found} film${s(st.found)} trouvé${s(st.found)} dans tes abonnements : ${parts.join(", ")}.`;
+}
+
 type TrackAction = "shown" | "trailer" | "watch" | "letterboxd" | "liked" | "seen" | "disliked";
 
 // Mesure anonyme : envoie sans bloquer la page, même si l'utilisateur quitte le site juste après.
@@ -76,7 +91,8 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
   const [personalized, setPersonalized] = useState(false);
   const [feedback, setFeedback] = useState<Record<number, Feedback>>({});
   const [searched, setSearched] = useState(false);
-  const [exhausted, setExhausted] = useState(false); // plus aucun film pour ces critères après « 3 autres films »
+  const [exhausted, setExhausted] = useState(false);
+  const [stats, setStats] = useState<SearchStats | null>(null); // plus aucun film pour ces critères après « 3 autres films »
   const [toast, setToast] = useState<string | null>(null);
   const [trailer, setTrailer] = useState<{ title: string; key: string; lang: TrailerLang } | null>(null);
   const shown = useRef<Set<number>>(new Set());
@@ -146,6 +162,7 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "Une erreur est survenue.");
     setDemo(data.demo);
+    if (count > 1) setStats(data.stats ?? null);
     setPersonalized(data.personalized);
     return data.films as Film[];
   }
@@ -357,22 +374,24 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
                   <strong>Tu as fait le tour</strong> des films qui correspondent à ces critères. Change de style, de
                   temps ou d&apos;époque, ou recommence depuis le début.
                 </p>
+                {explainStats(stats) && <p className="step-hint" style={{ margin: "0 0 10px" }}>{explainStats(stats)}</p>}
                 <button className="btn btn-sm" onClick={() => findFilms(false)} disabled={loading}>
                   ↺ Recommencer
                 </button>
               </div>
             ) : (
               <p className="notice">
-                Aucun film ne correspond. Essaie un autre style, plus de temps, une autre époque, ou ajoute un
-                abonnement dans tes préférences.
+                Aucun film ne correspond. {explainStats(stats) ?? ""} Essaie un autre style, plus de temps, une autre
+                époque, ou ajoute un abonnement dans tes préférences.
               </p>
             )
           ) : (
             <>
             {films.length < 3 && (
               <p className="notice" style={{ marginBottom: 18 }}>
-                Seulement {films.length} film{films.length > 1 ? "s" : ""} pour ces critères. Pour plus de choix,
-                choisis un seul style, plus de temps ou une autre époque.
+                Seulement {films.length} film{films.length > 1 ? "s" : ""} pour ces critères.{" "}
+                {explainStats(stats) ?? ""} Pour plus de choix, choisis un seul style, plus de temps ou une autre
+                époque.
               </p>
             )}
             <div className="grid">
