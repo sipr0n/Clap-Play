@@ -13,8 +13,31 @@ import { genreAffinity, type Taste } from "./taste";
 // m = nombre de votes à partir duquel on fait confiance à la note du film ; C = note moyenne des films.
 const M = 1500;
 const C = 6.6;
-export function reliableRating(rating: number, votes: number) {
-  return (votes / (votes + M)) * rating + (M / (votes + M)) * C;
+// Un film sorti depuis moins de 2 ans n'a pas encore eu le temps d'accumuler les votes :
+// on lui fait confiance plus tôt (400 votes au lieu de 1 500).
+const M_RECENT = 400;
+export function reliableRating(rating: number, votes: number, recent = false) {
+  const m = recent ? M_RECENT : M;
+  return (votes / (votes + m)) * rating + (m / (votes + m)) * C;
+}
+
+const MONTHS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août", "septembre", "octobre", "novembre", "décembre"];
+
+// Ancienneté en mois depuis la sortie (null si date inconnue ; négatif si pas encore sorti).
+export function monthsSince(releaseDate: string | undefined | null, now = new Date()) {
+  if (!releaseDate || !/^\d{4}-\d{2}/.test(releaseDate)) return null;
+  const [y, m] = releaseDate.split("-").map(Number);
+  return (now.getFullYear() - y) * 12 + (now.getMonth() + 1 - m);
+}
+
+// Bonus « sortie récente » : 1 jusqu'à 6 mois, puis décroît jusqu'à 0 à 3 ans.
+export function recencyBoost(months: number | null) {
+  if (months === null || months < 0) return 0;
+  if (months <= 6) return 1;
+  if (months <= 12) return 0.8;
+  if (months <= 24) return 0.5;
+  if (months <= 36) return 0.25;
+  return 0;
 }
 
 const clamp = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
@@ -28,6 +51,8 @@ export type ScoreInput = {
   year: number | null;
   genres: number[];
   popularityRank: number; // 0 = le plus populaire de la recherche
+  releaseDate?: string | null; // AAAA-MM-JJ, pour le bonus « sortie récente »
+  trendingRank?: number | null; // rang dans les sorties récentes les plus populaires du moment (0 = 1er)
   similarTo?: string | null; // titre du coup de cœur dont ce film est proche
   sameDirector?: { name: string; title: string; count: number } | null; // réalisateur d'un ou plusieurs coups de cœur
   favActor?: { name: string; count: number } | null; // acteur présent dans plusieurs coups de cœur
@@ -49,10 +74,20 @@ export const WEIGHTS = {
   actor: 1.5,
   popularity: 0.5,
   animation: 3,
+  recency: 1.5, // sortie récente et bien accueillie : on en parle, ça donne envie
+  trending: 0.8, // parmi les sorties récentes les plus populaires du moment (bouche-à-oreille)
 };
 
 export function scoreFilm(f: ScoreInput, taste: Taste | null, now = new Date()): Scored {
-  const reliable = reliableRating(f.rating, f.votes);
+  const months = monthsSince(f.releaseDate ?? (f.year ? `${f.year}-06` : null), now);
+  const reliable = reliableRating(f.rating, f.votes, months !== null && months <= 24);
+  // Récent ET bien accueilli : sans ça, un film juste sorti mais moyen serait poussé à tort.
+  const wellReceived = f.rating >= 6.8 && f.votes >= 100;
+  const recency = wellReceived ? recencyBoost(months) : 0;
+  const trending =
+    recency > 0 && f.trendingRank !== null && f.trendingRank !== undefined && f.trendingRank < 10
+      ? 1 - f.trendingRank / 10
+      : 0;
   const quality = clamp((reliable - 6) / 2.2, 0, 1.2); // 6/10 → 0, 8,2/10 → 1
   const notoriety = clamp((Math.log10(Math.max(f.votes, 1)) - 2.5) / 2.3, 0, 1); // 300 votes → 0, 60 000 → 1
   const affinity = genreAffinity(taste, f.genres); // de -1 (genres peu aimés) à +1
@@ -65,7 +100,9 @@ export function scoreFilm(f: ScoreInput, taste: Taste | null, now = new Date()):
     WEIGHTS.similar * (f.similarTo ? 1 : 0) +
     WEIGHTS.director * (f.sameDirector ? Math.min(1, 0.6 + 0.2 * f.sameDirector.count) : 0) +
     WEIGHTS.actor * (f.favActor ? Math.min(1, 0.4 + 0.2 * f.favActor.count) : 0) +
-    WEIGHTS.popularity * popularity -
+    WEIGHTS.popularity * popularity +
+    WEIGHTS.recency * recency +
+    WEIGHTS.trending * trending -
     WEIGHTS.animation * (f.genres.includes(ANIMATION) ? (f.animationPenalty ?? 1) : 0);
 
   // ---- Justifications ----
@@ -96,15 +133,24 @@ export function scoreFilm(f: ScoreInput, taste: Taste | null, now = new Date()):
     if (best && best.n >= 3) reasons.push({ kind: "taste", text: `Tu as aimé ${best.n} ${GENRE_PLURAL[best.g]}` });
   }
 
+  // Sortie récente et bien accueillie (jusqu'à 2 ans), et bouche-à-oreille.
+  const recentReason = recency >= 0.5 && f.rating >= 7 && f.votes >= 150;
+  if (recentReason) {
+    const [y, m] = (f.releaseDate ?? `${year}-01`).split("-").map(Number);
+    const when = f.releaseDate ? `${MONTHS[m - 1]} ${y}` : String(y);
+    reasons.push({ kind: "recent", text: `Sorti en ${when}, déjà noté ${fmtRating(f.rating)}/10 par ${fmtVotes(f.votes)} spectateurs` });
+  }
+  if (trending >= 0.3) reasons.push({ kind: "trending", text: "Parmi les sorties récentes les plus populaires du moment" });
+
   if (year && age >= 20 && f.votes >= 8000 && f.rating >= 7.8) {
     reasons.push({ kind: "classic", text: `Un classique : sorti en ${year}, toujours noté ${fmtRating(f.rating)}/10` });
+  } else if (recentReason) {
+    // La raison « sortie récente » dit déjà la note : pas de doublon.
   } else if (reliable >= 7.4 && f.votes >= 5000) {
     reasons.push({
       kind: "acclaimed",
       text: `Adoré du public : ${fmtRating(f.rating)}/10 sur ${fmtVotes(f.votes)} votes`,
     });
-  } else if (year && age <= 1 && f.rating >= 7 && f.votes >= 150) {
-    reasons.push({ kind: "recent", text: `Sorti en ${year} et déjà très bien noté : ${fmtRating(f.rating)}/10` });
   } else if (reliable >= 6.9 && f.votes >= 1000) {
     reasons.push({ kind: "rated", text: `Très bien noté : ${fmtRating(f.rating)}/10 sur ${fmtVotes(f.votes)} votes` });
   } else if (reliable >= 6.6) {
@@ -116,7 +162,7 @@ export function scoreFilm(f: ScoreInput, taste: Taste | null, now = new Date()):
   // - acceptable : bien noté, utilisé seulement s'il manque des films solides ;
   // - aucune : jamais proposé.
   const personal = reasons.some((r) => ["similar", "director", "actor", "taste"].includes(r.kind));
-  const publicStrong = reasons.some((r) => r.kind === "classic" || r.kind === "acclaimed" || r.kind === "recent") ||
+  const publicStrong = reasons.some((r) => ["classic", "acclaimed", "recent", "trending"].includes(r.kind)) ||
     (reliable >= 6.9 && f.votes >= 1000);
   const tier: Scored["tier"] =
     reliable < 6.4 || affinity <= -0.6 // trop faible, ou genres que l'utilisateur n'aime pas

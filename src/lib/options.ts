@@ -133,7 +133,7 @@ export type Film = {
 };
 
 export type Reason = {
-  kind: "similar" | "director" | "actor" | "taste" | "acclaimed" | "classic" | "recent" | "rated" | "critics";
+  kind: "similar" | "director" | "actor" | "taste" | "acclaimed" | "classic" | "recent" | "trending" | "rated" | "critics";
   text: string;
 };
 

@@ -112,11 +112,13 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
 
   // Candidats, notés et justifiés au fur et à mesure.
   const byId = new Map<number, Candidate>();
-  const add = (m: TmdbMovie, rank: number, similarTo: string | null) => {
+  const add = (m: TmdbMovie, rank: number, similarTo: string | null, trendingRank: number | null = null) => {
     if (excluded.has(m.id) || !matchesGenres(m.genre_ids ?? [], groups, avoid)) return;
     const prev = byId.get(m.id);
     const popularityRank = Math.min(rank, prev?.popularityRank ?? rank);
     const sim = similarTo ?? prev?.similarTo ?? null;
+    const trend =
+      trendingRank === null ? (prev?.input.trendingRank ?? null) : Math.min(trendingRank, prev?.input.trendingRank ?? 99);
     const input: ScoreInput = {
       id: m.id,
       rating: m.vote_average,
@@ -126,6 +128,8 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
       popularityRank,
       similarTo: sim,
       animationPenalty: animationPenalty(p.moodIds),
+      releaseDate: m.release_date ?? null,
+      trendingRank: trend,
     };
     byId.set(m.id, { ...m, similarTo: sim, popularityRank, input, scored: scoreFilm(input, taste) });
   };
@@ -171,6 +175,27 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
     if (fetches.length === 0) break; // plus aucune page à lire
     await Promise.all(fetches);
     if (justified() >= wanted) break;
+  }
+
+  // Sorties récentes (moins de 2 ans) les plus populaires du moment : le bouche-à-oreille.
+  // Pas avec l'époque « Classiques », qui demande des films d'avant 2000.
+  if (p.eraId !== "classique") {
+    const since = new Date();
+    since.setMonth(since.getMonth() - 24);
+    const today = new Date().toISOString().slice(0, 10);
+    await Promise.all(
+      queries.map(async (q) => {
+        const res = await tmdb<DiscoverResponse>("/discover/movie", {
+          ...withoutAnimation(q),
+          "primary_release_date.gte": since.toISOString().slice(0, 10),
+          "primary_release_date.lte": today,
+          "vote_count.gte": "100",
+          sort_by: "popularity.desc",
+          page: "1",
+        }).catch(() => null);
+        for (const [i, m] of (res?.results ?? []).entries()) add(m, 10 + i, null, i);
+      }),
+    );
   }
 
   // Chefs-d'œuvre d'animation (une page, très bien notés) quand l'animation est exclue des listes principales.

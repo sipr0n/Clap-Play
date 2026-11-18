@@ -26,6 +26,7 @@ const REASON_ICON: Record<Reason["kind"], string> = {
   acclaimed: "🏆",
   classic: "🎞️",
   recent: "✨",
+  trending: "🔥",
   rated: "👍",
   critics: "🍅",
 };
