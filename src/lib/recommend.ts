@@ -1,11 +1,12 @@
 import { DEMO_FILMS } from "./demo";
-import { Film, MOODS, PROVIDERS, TIMES, WATCH_REGION, letterboxdUrl } from "./options";
+import { Film, MOODS, PROVIDERS, TIMES, WATCH_REGION, eraRange, inEra, letterboxdUrl } from "./options";
 import { Taste, genreAffinity } from "./taste";
 import { POSTER, TmdbDetails, TmdbMovie, hasTmdb, tmdb } from "./tmdb";
 
 export type RecommendParams = {
   moodId: string;
   timeId: string;
+  eraId?: string; // époque : tous, recent, moderne, classique
   providerIds: number[];
   exclude?: number[]; // films déjà vus ou déjà affichés
   count?: number; // 3 par défaut, 1 pour remplacer un film « Déjà vu »
@@ -71,6 +72,10 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
     sort_by: "popularity.desc",
   };
   if (time.maxRuntime) params["with_runtime.lte"] = String(time.maxRuntime);
+  const era = eraRange(p.eraId ?? "tous");
+  if (era.from) params["primary_release_date.gte"] = era.from;
+  if (era.to) params["primary_release_date.lte"] = era.to;
+  if (p.eraId === "recent") params["vote_count.gte"] = "100"; // les films récents ont encore peu de votes
 
   // 1) Films du catalogue qui collent à l'humeur, la durée et les abonnements (2 pages au hasard).
   const first = await tmdb<DiscoverResponse>("/discover/movie", { ...params, page: "1" });
@@ -106,6 +111,7 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
         (m) =>
           !excluded.has(m.id) &&
           (m.genre_ids ?? []).some((g) => mood.genres.includes(g)) &&
+          inEra(p.eraId ?? "tous", m.release_date?.slice(0, 4)) &&
           m.vote_average >= 6.3,
       );
     // On vérifie la durée et la disponibilité sur les abonnements pour quelques-uns.
@@ -167,6 +173,7 @@ function recommendFromDemo(p: RecommendParams): Film[] {
     (f) =>
       f.genres.some((g) => mood.genres.includes(g)) &&
       (time.maxRuntime === null || f.runtime <= time.maxRuntime) &&
+      inEra(p.eraId ?? "tous", f.year) &&
       f.providers.some((id) => p.providerIds.includes(id)) &&
       !excluded.has(f.id),
   ).map((f) => ({

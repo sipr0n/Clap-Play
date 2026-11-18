@@ -33,6 +33,37 @@ export const TIMES: TimeOption[] = [
   { id: "illimite", label: "J'ai toute la soirée", maxRuntime: null },
 ];
 
+export type Era = {
+  id: string;
+  label: string;
+};
+
+// Époque des films. Les dates exactes sont calculées au moment de la recherche (voir eraRange).
+export const ERAS: Era[] = [
+  { id: "tous", label: "Peu importe" },
+  { id: "recent", label: "Récents (3 dernières années)" },
+  { id: "moderne", label: "Depuis 2000" },
+  { id: "classique", label: "Classiques (avant 2000)" },
+];
+
+// Bornes de dates de sortie pour une époque (format AAAA-MM-JJ, compris dans l'intervalle).
+export function eraRange(eraId: string, now = new Date()): { from: string | null; to: string | null } {
+  const year = now.getFullYear();
+  if (eraId === "recent") return { from: `${year - 3}-01-01`, to: null };
+  if (eraId === "moderne") return { from: "2000-01-01", to: null };
+  if (eraId === "classique") return { from: null, to: "1999-12-31" };
+  return { from: null, to: null };
+}
+
+export function inEra(eraId: string, year: string | number | undefined): boolean {
+  const { from, to } = eraRange(eraId);
+  const y = Number(year);
+  if (!y) return eraId === "tous";
+  if (from && y < Number(from.slice(0, 4))) return false;
+  if (to && y > Number(to.slice(0, 4))) return false;
+  return true;
+}
+
 export type Provider = {
   id: number; // identifiant TMDB de la plateforme (région FR)
   name: string;

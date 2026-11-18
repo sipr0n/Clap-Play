@@ -1,9 +1,12 @@
 "use client";
 
+import type { TrailerLang } from "@/lib/trailer";
+
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Logo from "@/components/Logo";
-import { Film, MOODS, PROVIDERS, TIMES } from "@/lib/options";
+import TrailerModal from "@/components/TrailerModal";
+import { ERAS, Film, MOODS, PROVIDERS, TIMES } from "@/lib/options";
 
 type Props = {
   loggedIn: boolean;
@@ -33,6 +36,7 @@ const store = {
 export default function Picker({ loggedIn, accountsEnabled, initialProviders }: Props) {
   const [mood, setMood] = useState<string | null>(null);
   const [time, setTime] = useState<string>("normal");
+  const [era, setEra] = useState<string>("tous");
   const [providers, setProviders] = useState<number[]>(initialProviders);
   const [films, setFilms] = useState<Film[]>([]);
   const [loading, setLoading] = useState(false);
@@ -42,6 +46,8 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
   const [personalized, setPersonalized] = useState(false);
   const [feedback, setFeedback] = useState<Record<number, Feedback>>({});
   const [searched, setSearched] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [trailer, setTrailer] = useState<{ title: string; key: string; lang: TrailerLang } | null>(null);
   const shown = useRef<Set<number>>(new Set());
   const resultsRef = useRef<HTMLDivElement>(null);
 
@@ -53,6 +59,13 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
       if (saved.length) setProviders(saved);
     }
   }, [loggedIn, initialProviders.length]);
+
+  // Le message temporaire disparaît tout seul après 3,5 secondes.
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 3500);
+    return () => clearTimeout(t);
+  }, [toast]);
 
   const localSeen = () => store.get<number[]>("cp.seen", []);
 
@@ -68,6 +81,7 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
     const q = new URLSearchParams({
       mood: mood!,
       time,
+      era,
       providers: providers.join(","),
       count: String(count),
       exclude: exclude.join(","),
@@ -108,31 +122,58 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
 
   async function sendFeedback(film: Film, status: Feedback) {
     setFeedback((f) => ({ ...f, [film.id]: status }));
+    // « Déjà vu » ou « Pas pour moi » : on remplace le film par un autre, pendant l'enregistrement.
+    const replaced = status !== "liked" ? replaceFilm(film) : Promise.resolve(true);
+
+    let saved = true;
     if (loggedIn) {
-      fetch("/api/me/feedback", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ tmdbId: film.id, title: film.title, year: film.year, genres: film.genres, status }),
-      }).catch(() => {});
+      try {
+        const res = await fetch("/api/me/feedback", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ tmdbId: film.id, title: film.title, year: film.year, genres: film.genres, status }),
+        });
+        saved = res.ok;
+      } catch {
+        saved = false;
+      }
     } else if (status !== "liked") {
       store.set("cp.seen", [...new Set([...localSeen(), film.id])].slice(-500));
     }
-    // « Déjà vu » ou « Pas pour moi » : on remplace le film par un autre.
-    if (status !== "liked") await replaceFilm(film);
+
+    const hasReplacement = await replaced;
+    if (!saved) {
+      setFeedback((f) => {
+        const next = { ...f };
+        delete next[film.id];
+        return next;
+      });
+      setToast("Ton choix n'a pas pu être enregistré. Vérifie ta connexion et réessaie.");
+    } else if (status === "liked") {
+      setToast(`« ${film.title} » ajouté à tes coups de cœur.`);
+    } else {
+      setToast(
+        `« ${film.title} » ne te sera plus proposé.` +
+          (hasReplacement ? "" : " Plus d'autre film pour ces critères : élargis ta recherche."),
+      );
+    }
   }
 
-  async function replaceFilm(film: Film) {
+  // Remplace un film par un autre. Renvoie false s'il n'y avait plus de film à proposer.
+  async function replaceFilm(film: Film): Promise<boolean> {
     setReplacing(film.id);
     try {
       const [next] = await fetchFilms(1, [...localSeen(), ...shown.current, film.id]);
       if (next) {
         shown.current.add(next.id);
         setFilms((list) => list.map((f) => (f.id === film.id ? next : f)));
-      } else {
-        setFilms((list) => list.filter((f) => f.id !== film.id));
+        return true;
       }
+      setFilms((list) => list.filter((f) => f.id !== film.id));
+      return false;
     } catch (e) {
       setError((e as Error).message);
+      return true;
     } finally {
       setReplacing(null);
     }
@@ -147,7 +188,7 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
         <h1>
           Indécis ? <em>3 films</em> pour ce soir.
         </h1>
-        <p>Dis-nous ton humeur, ton temps libre et tes abonnements. On s&apos;occupe du reste.</p>
+        <p>Dis-nous ton humeur, ton temps libre, l&apos;époque et tes abonnements. On s&apos;occupe du reste.</p>
       </section>
 
       <section className="step" aria-labelledby="step-mood">
@@ -176,9 +217,22 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
         </div>
       </section>
 
+      <section className="step" aria-labelledby="step-era">
+        <h2 className="step-title" id="step-era">
+          <span className="step-num">3</span> Plutôt récent ou plus ancien ?
+        </h2>
+        <div className="chips">
+          {ERAS.map((e) => (
+            <button key={e.id} className="chip" aria-pressed={era === e.id} onClick={() => setEra(e.id)}>
+              {e.label}
+            </button>
+          ))}
+        </div>
+      </section>
+
       <section className="step" aria-labelledby="step-providers">
         <h2 className="step-title" id="step-providers">
-          <span className="step-num">3</span> Tes abonnements
+          <span className="step-num">4</span> Tes abonnements
         </h2>
         <p className="step-hint">
           {loggedIn ? "Enregistrés dans ton profil." : "Mémorisés sur cet appareil."} Plusieurs choix possibles.
@@ -234,14 +288,15 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
 
           {films.length === 0 ? (
             <p className="notice">
-              Plus aucun film ne correspond. Essaie un autre mood, plus de temps ou d&apos;autres abonnements.
+              Plus aucun film ne correspond. Essaie un autre mood, plus de temps, une autre époque ou d&apos;autres
+              abonnements.
             </p>
           ) : (
             <>
             {films.length < 3 && (
               <p className="notice" style={{ marginBottom: 18 }}>
                 Seulement {films.length} film{films.length > 1 ? "s" : ""} pour ces critères. Ajoute un abonnement ou
-                du temps pour plus de choix.
+                du temps, ou change d&apos;époque pour plus de choix.
               </p>
             )}
             <div className="grid">
@@ -250,9 +305,11 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
                   key={film.id}
                   film={film}
                   loggedIn={loggedIn}
+                  demo={demo}
                   busy={replacing === film.id}
                   status={feedback[film.id]}
                   onFeedback={(s) => sendFeedback(film, s)}
+                  onTrailer={(key, lang) => setTrailer({ title: film.title, key, lang })}
                 />
               ))}
             </div>
@@ -260,6 +317,15 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
           )}
         </section>
       ) : null}
+
+      {trailer && (
+        <TrailerModal title={trailer.title} videoKey={trailer.key} lang={trailer.lang} onClose={() => setTrailer(null)} />
+      )}
+      {toast && (
+        <div className="toast" role="status">
+          {toast}
+        </div>
+      )}
     </>
   );
 }
@@ -267,16 +333,38 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
 function FilmCard({
   film,
   loggedIn,
+  demo,
   busy,
   status,
   onFeedback,
+  onTrailer,
 }: {
   film: Film;
   loggedIn: boolean;
+  demo: boolean;
   busy: boolean;
   status?: Feedback;
   onFeedback: (s: Feedback) => void;
+  onTrailer: (key: string, lang: TrailerLang) => void;
 }) {
+  const [trailerState, setTrailerState] = useState<"idle" | "loading" | "none">("idle");
+
+  async function openTrailer() {
+    setTrailerState("loading");
+    try {
+      const res = await fetch(`/api/films/${film.id}/trailer`);
+      const data = await res.json();
+      if (res.ok && data.trailer) {
+        setTrailerState("idle");
+        onTrailer(data.trailer.key, data.trailer.lang);
+      } else {
+        setTrailerState("none");
+      }
+    } catch {
+      setTrailerState("none");
+    }
+  }
+
   const hours = film.runtime ? `${Math.floor(film.runtime / 60)}h${String(film.runtime % 60).padStart(2, "0")}` : null;
 
   return (
@@ -308,6 +396,15 @@ function FilmCard({
           </div>
         )}
         <div className="card-actions">
+          {!demo && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={openTrailer}
+              disabled={trailerState !== "idle"}
+            >
+              {trailerState === "loading" ? "Chargement…" : "🎬 Bande-annonce"}
+            </button>
+          )}
           {film.watchLink && (
             <a className="btn btn-sm" href={film.watchLink} target="_blank" rel="noreferrer">
               ▶ Où regarder
@@ -317,6 +414,7 @@ function FilmCard({
             ★ Noter sur Letterboxd
           </a>
         </div>
+        {trailerState === "none" && <p className="card-note">Pas de bande-annonce disponible pour ce film.</p>}
         <div className="feedback">
           <button className="btn btn-ghost btn-sm" disabled={busy} onClick={() => onFeedback("seen")}>
             👁 Déjà vu
