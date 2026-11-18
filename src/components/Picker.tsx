@@ -1,17 +1,19 @@
 "use client";
 
 import type { TrailerLang } from "@/lib/trailer";
-
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
 import TrailerModal from "@/components/TrailerModal";
-import { ERAS, Film, MOODS, PROVIDERS, TIMES } from "@/lib/options";
+import { AVOIDABLE_GENRES, ERAS, Film, MAX_MOODS, MOODS, PROVIDERS, TIMES, visibleMoods } from "@/lib/options";
+import type { Prefs } from "@/lib/prefs";
+import { readLocalPrefs } from "@/lib/localPrefs";
 
 type Props = {
   loggedIn: boolean;
   accountsEnabled: boolean;
-  initialProviders: number[];
+  initialPrefs: Prefs | null; // préférences du profil (utilisateur connecté)
 };
 
 type Feedback = "seen" | "liked" | "disliked";
@@ -33,11 +35,12 @@ const store = {
   },
 };
 
-export default function Picker({ loggedIn, accountsEnabled, initialProviders }: Props) {
-  const [mood, setMood] = useState<string | null>(null);
+export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Props) {
+  const router = useRouter();
+  const [prefs, setPrefs] = useState<Prefs | null>(initialPrefs);
+  const [moods, setMoods] = useState<string[]>([]);
   const [time, setTime] = useState<string>("normal");
   const [era, setEra] = useState<string>("tous");
-  const [providers, setProviders] = useState<number[]>(initialProviders);
   const [films, setFilms] = useState<Film[]>([]);
   const [loading, setLoading] = useState(false);
   const [replacing, setReplacing] = useState<number | null>(null);
@@ -51,14 +54,14 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
   const shown = useRef<Set<number>>(new Set());
   const resultsRef = useRef<HTMLDivElement>(null);
 
-  // Sans compte, on mémorise les abonnements et les films « déjà vus » dans le navigateur.
+  // Préférences : celles du profil, sinon celles de cet appareil, sinon on les demande d'abord.
   useEffect(() => {
-    if (!loggedIn && initialProviders.length === 0) {
-      const saved = store.get<number[]>("cp.providers", []);
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (saved.length) setProviders(saved);
-    }
-  }, [loggedIn, initialProviders.length]);
+    if (initialPrefs) return;
+    const local = readLocalPrefs();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (local) setPrefs(local);
+    else router.replace("/preferences?bienvenue=1");
+  }, [initialPrefs, router]);
 
   // Le message temporaire disparaît tout seul après 3,5 secondes.
   useEffect(() => {
@@ -68,21 +71,24 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
   }, [toast]);
 
   const localSeen = () => store.get<number[]>("cp.seen", []);
+  const avoid = prefs?.avoidGenres ?? [];
+  const moodChoices = visibleMoods(avoid);
 
-  function toggleProvider(id: number) {
-    setProviders((prev) => {
-      const next = prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id];
-      store.set("cp.providers", next);
-      return next;
+  // Jusqu'à 2 styles : un 3e remplace le plus ancien.
+  function toggleMood(id: string) {
+    setMoods((prev) => {
+      if (prev.includes(id)) return prev.filter((m) => m !== id);
+      return [...prev, id].slice(-MAX_MOODS);
     });
   }
 
   async function fetchFilms(count: number, exclude: number[]) {
     const q = new URLSearchParams({
-      mood: mood!,
+      mood: moods.join(","),
       time,
       era,
-      providers: providers.join(","),
+      providers: (prefs?.providers ?? []).join(","),
+      avoid: avoid.join(","),
       count: String(count),
       exclude: exclude.join(","),
     });
@@ -95,18 +101,11 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
   }
 
   async function findFilms(again = false) {
-    if (!mood || providers.length === 0) return;
+    if (moods.length === 0 || !prefs) return;
     setLoading(true);
     setError(null);
     if (!again) shown.current = new Set();
     try {
-      if (loggedIn) {
-        fetch("/api/me/profile", {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ providers }),
-        }).catch(() => {});
-      }
       const list = await fetchFilms(3, [...localSeen(), ...shown.current]);
       list.forEach((f) => shown.current.add(f.id));
       setFilms(list);
@@ -179,7 +178,10 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
     }
   }
 
-  const ready = Boolean(mood) && providers.length > 0;
+  const ready = moods.length > 0 && Boolean(prefs);
+  const moodLabels = moods.map((id) => MOODS.find((m) => m.id === id)?.label ?? id);
+  const myProviders = PROVIDERS.filter((p) => prefs?.providers.includes(p.id));
+  const avoidLabels = AVOIDABLE_GENRES.filter((g) => avoid.includes(g.id)).map((g) => g.label);
 
   return (
     <>
@@ -188,20 +190,42 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
         <h1>
           Indécis ? <em>3 films</em> pour ce soir.
         </h1>
-        <p>Dis-nous ton humeur, ton temps libre, l&apos;époque et tes abonnements. On s&apos;occupe du reste.</p>
+        <p>Dis-nous ton mood, ton temps libre et l&apos;époque. On s&apos;occupe du reste.</p>
       </section>
+
+      {prefs && (
+        <div className="prefs-summary">
+          <span className="logos" aria-label={`Tes abonnements : ${myProviders.map((p) => p.name).join(", ")}`}>
+            {myProviders.map((p) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img key={p.id} src={p.logo} alt={p.name} title={p.name} width={28} height={28} />
+            ))}
+          </span>
+          <span>{avoidLabels.length ? `Sans : ${avoidLabels.join(", ")}` : "Tous les genres"}</span>
+          <span className="spacer" />
+          <Link href="/preferences" className="btn btn-sm">
+            Modifier
+          </Link>
+        </div>
+      )}
 
       <section className="step" aria-labelledby="step-mood">
         <h2 className="step-title" id="step-mood">
           <span className="step-num">1</span> Ton mood du moment
         </h2>
+        <p className="step-hint">Choisis 1 style, ou 2 pour un film qui mélange les deux.</p>
         <div className="chips">
-          {MOODS.map((m) => (
-            <button key={m.id} className="chip" aria-pressed={mood === m.id} onClick={() => setMood(m.id)}>
+          {moodChoices.map((m) => (
+            <button key={m.id} className="chip" aria-pressed={moods.includes(m.id)} onClick={() => toggleMood(m.id)}>
               <span aria-hidden="true">{m.emoji}</span> {m.label}
             </button>
           ))}
         </div>
+        {moods.length === MAX_MOODS && (
+          <p className="mood-hint">
+            Des films à la fois <strong>{moodLabels[0]}</strong> et <strong>{moodLabels[1]}</strong>.
+          </p>
+        )}
       </section>
 
       <section className="step" aria-labelledby="step-time">
@@ -230,33 +254,11 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
         </div>
       </section>
 
-      <section className="step" aria-labelledby="step-providers">
-        <h2 className="step-title" id="step-providers">
-          <span className="step-num">4</span> Tes abonnements
-        </h2>
-        <p className="step-hint">
-          {loggedIn ? "Enregistrés dans ton profil." : "Mémorisés sur cet appareil."} Plusieurs choix possibles.
-        </p>
-        <div className="chips">
-          {PROVIDERS.map((p) => (
-            <button
-              key={p.id}
-              className="chip"
-              aria-pressed={providers.includes(p.id)}
-              onClick={() => toggleProvider(p.id)}
-            >
-              <span className="dot" style={{ background: p.color }} aria-hidden="true" />
-              {p.name}
-            </button>
-          ))}
-        </div>
-      </section>
-
       <div className="cta">
         <button className="btn btn-primary btn-lg" disabled={!ready || loading} onClick={() => findFilms()}>
           {loading ? "Recherche en cours…" : "🎬 Clap ! Trouve-moi 3 films"}
         </button>
-        {!ready && <small>Choisis un mood et au moins un abonnement.</small>}
+        {!ready && prefs && <small>Choisis au moins un style.</small>}
         {ready && !loggedIn && accountsEnabled && (
           <small>
             <Link href="/connexion">Connecte-toi</Link> pour des propositions basées sur tes goûts (Letterboxd…).
@@ -288,15 +290,15 @@ export default function Picker({ loggedIn, accountsEnabled, initialProviders }: 
 
           {films.length === 0 ? (
             <p className="notice">
-              Plus aucun film ne correspond. Essaie un autre mood, plus de temps, une autre époque ou d&apos;autres
-              abonnements.
+              Aucun film ne correspond. Essaie un autre style, plus de temps, une autre époque, ou ajoute un
+              abonnement dans tes préférences.
             </p>
           ) : (
             <>
             {films.length < 3 && (
               <p className="notice" style={{ marginBottom: 18 }}>
-                Seulement {films.length} film{films.length > 1 ? "s" : ""} pour ces critères. Ajoute un abonnement ou
-                du temps, ou change d&apos;époque pour plus de choix.
+                Seulement {films.length} film{films.length > 1 ? "s" : ""} pour ces critères. Pour plus de choix,
+                choisis un seul style, plus de temps ou une autre époque.
               </p>
             )}
             <div className="grid">

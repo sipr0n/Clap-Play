@@ -5,6 +5,7 @@ create table if not exists public.profiles (
   id uuid primary key references auth.users (id) on delete cascade,
   letterboxd_username text,
   providers int[] not null default '{}',     -- abonnements streaming (identifiants TMDB)
+  avoid_genres int[] not null default '{}',  -- genres à ne jamais proposer (identifiants TMDB)
   updated_at timestamptz not null default now()
 );
 

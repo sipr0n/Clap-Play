@@ -5,20 +5,49 @@ export type Mood = {
   id: string;
   label: string;
   emoji: string;
-  genres: number[]; // genres TMDB (un film doit en avoir au moins un)
+  genres: number[]; // genres TMDB : un film doit en avoir au moins un
 };
 
+// Styles proposés sur l'accueil. On peut en choisir jusqu'à 2 : le film doit alors correspondre aux deux.
 export const MOODS: Mood[] = [
-  { id: "rire", label: "Envie de rire", emoji: "😂", genres: [35] },
-  { id: "adrenaline", label: "Adrénaline", emoji: "💥", genres: [28, 53] },
-  { id: "amour", label: "Romantique", emoji: "💛", genres: [10749] },
+  { id: "rire", label: "Rire", emoji: "😂", genres: [35] },
+  { id: "action", label: "Action", emoji: "💥", genres: [28] },
+  { id: "suspense", label: "Suspense", emoji: "😰", genres: [53] },
+  { id: "enquete", label: "Enquête", emoji: "🕵️", genres: [9648, 80] },
   { id: "frissons", label: "Frissons", emoji: "👻", genres: [27] },
+  { id: "amour", label: "Romance", emoji: "💛", genres: [10749] },
   { id: "emotion", label: "Émotion", emoji: "🥲", genres: [18] },
-  { id: "evasion", label: "Évasion", emoji: "🚀", genres: [12, 14, 878] },
-  { id: "enquete", label: "Mystère", emoji: "🕵️", genres: [9648, 80] },
-  { id: "cocooning", label: "Cocooning", emoji: "🛋️", genres: [16, 10751] },
-  { id: "curieux", label: "Curieux", emoji: "🧠", genres: [99, 36] },
+  { id: "sf", label: "Science-fiction", emoji: "🚀", genres: [878] },
+  { id: "fantastique", label: "Fantastique", emoji: "🐉", genres: [14] },
+  { id: "aventure", label: "Aventure", emoji: "🧭", genres: [12] },
+  { id: "famille", label: "En famille", emoji: "🛋️", genres: [10751] },
+  { id: "anime", label: "Animation", emoji: "🎨", genres: [16] },
+  { id: "histoire", label: "Histoire & guerre", emoji: "🏛️", genres: [36, 10752] },
+  { id: "musique", label: "Musique", emoji: "🎵", genres: [10402] },
+  { id: "curieux", label: "Documentaire", emoji: "🧠", genres: [99] },
 ];
+
+export const MAX_MOODS = 2;
+
+// Genres qu'on peut choisir de ne jamais voir (page « Mes préférences »).
+export const AVOIDABLE_GENRES: { id: number; label: string }[] = [
+  { id: 16, label: "Animation" },
+  { id: 27, label: "Horreur" },
+  { id: 53, label: "Thriller" },
+  { id: 10752, label: "Guerre" },
+  { id: 10749, label: "Romance" },
+  { id: 10402, label: "Comédie musicale" },
+  { id: 99, label: "Documentaire" },
+  { id: 37, label: "Western" },
+  { id: 878, label: "Science-fiction" },
+  { id: 14, label: "Fantastique" },
+  { id: 10751, label: "Familial" },
+];
+
+// Un style est masqué si tous ses genres sont exclus par l'utilisateur.
+export function visibleMoods(excluded: number[]) {
+  return MOODS.filter((m) => m.genres.some((g) => !excluded.includes(g)));
+}
 
 export type TimeOption = {
   id: string;
@@ -68,17 +97,20 @@ export type Provider = {
   id: number; // identifiant TMDB de la plateforme (région FR)
   name: string;
   color: string;
+  logo: string; // logo officiel fourni par TMDB
 };
 
+const LOGO = "https://image.tmdb.org/t/p/w92";
+
 export const PROVIDERS: Provider[] = [
-  { id: 8, name: "Netflix", color: "#E50914" },
-  { id: 119, name: "Prime Video", color: "#00A8E1" },
-  { id: 337, name: "Disney+", color: "#113CCF" },
-  { id: 381, name: "Canal+", color: "#E6E6E6" },
-  { id: 350, name: "Apple TV+", color: "#A2AAAD" },
-  { id: 1899, name: "Max", color: "#002BE7" },
-  { id: 531, name: "Paramount+", color: "#0064FF" },
-  { id: 11, name: "MUBI", color: "#9B9B9B" },
+  { id: 8, name: "Netflix", color: "#E50914", logo: `${LOGO}/rK1KljqmbvO9HQa1PBFLILWah72.png` },
+  { id: 119, name: "Prime Video", color: "#00A8E1", logo: `${LOGO}/gMZdpavHmxFNnLpMHwVxfqeux2g.png` },
+  { id: 337, name: "Disney+", color: "#113CCF", logo: `${LOGO}/5eZ872CghnHFLB1j8grszbrx0dx.png` },
+  { id: 381, name: "Canal+", color: "#E6E6E6", logo: `${LOGO}/gliWKhLJVdm7QwL1braBCRko5dx.png` },
+  { id: 350, name: "Apple TV", color: "#A2AAAD", logo: `${LOGO}/9icYBfYFcwgCbky5VdGUIKJ4C5i.png` },
+  { id: 1899, name: "HBO Max", color: "#002BE7", logo: `${LOGO}/skypuy7SXuugIQeYg0IglmzoKaS.png` },
+  { id: 531, name: "Paramount+", color: "#0064FF", logo: `${LOGO}/pkx3klJlwW5JdtaulvDx6hDNtch.png` },
+  { id: 11, name: "MUBI", color: "#9B9B9B", logo: `${LOGO}/k7iSlvgWzZuO4zU5PcBjhABMuia.png` },
 ];
 
 export const WATCH_REGION = "FR";

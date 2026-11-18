@@ -33,6 +33,12 @@ async function ProfileContent() {
       </div>
 
       <div className="panel">
+        <h2>Abonnements et genres à éviter</h2>
+        <p>Les plateformes auxquelles tu es abonné et les genres que tu ne veux jamais voir.</p>
+        <Link href="/preferences" className="btn">⚙️ Mes préférences</Link>
+      </div>
+
+      <div className="panel">
         <h2>Letterboxd</h2>
         <p>
           On lit ton journal public (tes derniers films vus et notés) : ces films ne te seront plus proposés et tes

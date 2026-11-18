@@ -1,21 +1,31 @@
 import { Suspense } from "react";
 import Picker from "@/components/Picker";
+import Logo from "@/components/Logo";
 import { getUser } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
+import { loadPrefs } from "@/lib/prefs";
 
 async function PersonalPicker() {
   const { supabase, user } = await getUser();
-  let providers: number[] = [];
-  if (supabase && user) {
-    const { data } = await supabase.from("profiles").select("providers").eq("id", user.id).maybeSingle();
-    providers = data?.providers ?? [];
-  }
-  return <Picker loggedIn={Boolean(user)} accountsEnabled={isSupabaseConfigured} initialProviders={providers} />;
+  const prefs = supabase && user ? await loadPrefs(supabase, user) : null;
+  return <Picker loggedIn={Boolean(user)} accountsEnabled={isSupabaseConfigured} initialPrefs={prefs} />;
+}
+
+// Affiché le temps de savoir qui est connecté (quelques millisecondes).
+function Loading() {
+  return (
+    <section className="hero">
+      <Logo size={190} className="hero-logo" />
+      <h1>
+        Indécis ? <em>3 films</em> pour ce soir.
+      </h1>
+    </section>
+  );
 }
 
 export default function Home() {
   return (
-    <Suspense fallback={<Picker loggedIn={false} accountsEnabled={isSupabaseConfigured} initialProviders={[]} />}>
+    <Suspense fallback={<Loading />}>
       <PersonalPicker />
     </Suspense>
   );
