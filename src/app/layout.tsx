@@ -19,8 +19,11 @@ async function UserNav() {
   if (user) {
     return (
       <>
+        <Link href="/historique" className="btn btn-ghost btn-sm">
+          Historique
+        </Link>
         <Link href="/profil" className="btn btn-sm">
-          {name ? `Profil de ${name}` : "Mon profil"}
+          Profil<span className="nav-name">{name ? ` de ${name}` : ""}</span>
         </Link>
         <form action="/auth/signout" method="post">
           <button className="btn btn-ghost btn-sm">Déconnexion</button>
@@ -64,6 +67,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <div className="footer-links">
               <Link href="/confidentialite">Confidentialité</Link>
               <Link href="/conditions">Conditions d&apos;utilisation</Link>
+              <Link href="/mentions-legales">Mentions légales</Link>
             </div>
           </div>
         </footer>

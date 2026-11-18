@@ -113,7 +113,7 @@ export function DeleteData() {
   async function remove() {
     setStep("busy");
     setError(null);
-    const res = await fetch("/api/me/data", { method: "DELETE" });
+    const res = await fetch("/api/me/account", { method: "DELETE" });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error ?? "La suppression a échoué. Réessaie.");
@@ -125,27 +125,34 @@ export function DeleteData() {
     window.location.href = "/";
   }
 
-  if (step === "idle") {
-    return (
-      <button className="btn btn-danger" onClick={() => setStep("confirm")}>
-        Supprimer mes données
-      </button>
-    );
-  }
   return (
     <>
-      <p style={{ color: "var(--text)" }}>
-        Tes films, tes notes, ton lien Letterboxd et tes abonnements seront effacés, puis tu seras déconnecté. Cette
-        action est définitive.
-      </p>
       <div className="row">
-        <button className="btn btn-danger" onClick={remove} disabled={step === "busy"}>
-          {step === "busy" ? "Suppression…" : "Oui, tout supprimer"}
-        </button>
-        <button className="btn btn-ghost" onClick={() => setStep("idle")} disabled={step === "busy"}>
-          Annuler
-        </button>
+        <a className="btn" href="/api/me/export" download>
+          ⬇️ Télécharger mes données
+        </a>
+        {step === "idle" && (
+          <button className="btn btn-danger" onClick={() => setStep("confirm")}>
+            Supprimer mon compte
+          </button>
+        )}
       </div>
+      {step !== "idle" && (
+        <div style={{ marginTop: 14 }}>
+          <p style={{ color: "var(--text)" }}>
+            Ton compte, ton historique, ton lien Letterboxd et tes préférences seront effacés définitivement, puis tu
+            seras déconnecté.
+          </p>
+          <div className="row">
+            <button className="btn btn-danger" onClick={remove} disabled={step === "busy"}>
+              {step === "busy" ? "Suppression…" : "Oui, tout supprimer"}
+            </button>
+            <button className="btn btn-ghost" onClick={() => setStep("idle")} disabled={step === "busy"}>
+              Annuler
+            </button>
+          </div>
+        </div>
+      )}
       {error && <p className="error" role="alert" style={{ marginTop: 10, marginBottom: 0 }}>{error}</p>}
     </>
   );

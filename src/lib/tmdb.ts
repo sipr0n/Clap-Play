@@ -35,6 +35,7 @@ export type TmdbDetails = {
   release_date?: string;
   runtime: number | null;
   genres: { id: number }[];
+  poster_path?: string | null;
 };
 
 // Exécute des tâches avec un nombre limité d'appels simultanés.

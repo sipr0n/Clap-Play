@@ -34,3 +34,5 @@ create policy "profil perso" on public.profiles
 drop policy if exists "films perso" on public.film_events;
 create policy "films perso" on public.film_events
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Les évolutions suivantes sont dans supabase/migrations/ (002, 003, 004), à lancer dans l'ordre.

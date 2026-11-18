@@ -63,6 +63,11 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
     else router.replace("/preferences?bienvenue=1");
   }, [initialPrefs, router]);
 
+  // Utilisateur connecté : on note la visite et on resynchronise Letterboxd si besoin (en arrière-plan).
+  useEffect(() => {
+    if (loggedIn) fetch("/api/me/visit", { method: "POST" }).catch(() => {});
+  }, [loggedIn]);
+
   // Le message temporaire disparaît tout seul après 3,5 secondes.
   useEffect(() => {
     if (!toast) return;
@@ -130,7 +135,14 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
         const res = await fetch("/api/me/feedback", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ tmdbId: film.id, title: film.title, year: film.year, genres: film.genres, status }),
+          body: JSON.stringify({
+            tmdbId: film.id,
+            title: film.title,
+            year: film.year,
+            genres: film.genres,
+            poster: film.poster,
+            status,
+          }),
         });
         saved = res.ok;
       } catch {

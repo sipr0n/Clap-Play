@@ -1,6 +1,7 @@
 import { getUser } from "@/lib/supabase/server";
 import { unauthorized } from "@/lib/me";
-import { TmdbMovie, hasTmdb, mapLimit, tmdb } from "@/lib/tmdb";
+import { POSTER, TmdbMovie, hasTmdb, mapLimit, tmdb } from "@/lib/tmdb";
+import { upsertTolerant } from "@/lib/db";
 
 export const maxDuration = 60;
 
@@ -53,15 +54,16 @@ export async function POST(request: Request) {
       title: m.title,
       year: m.release_date?.slice(0, 4) ?? r.year ?? null,
       genres: m.genre_ids ?? [],
+      poster: m.poster_path ? POSTER + m.poster_path : null,
       rating,
       status: "seen",
       source: format === "imdb" ? "csv_imdb" : "csv_letterboxd",
     });
   });
 
-  const toSave = [...byId.values()];
+  const toSave = [...byId.values()] as Record<string, unknown>[];
   if (toSave.length > 0) {
-    const { error } = await supabase.from("film_events").upsert(toSave);
+    const { error } = await upsertTolerant(supabase, "film_events", toSave, ["poster"], { ignoreDuplicates: true }); // ne remplace pas un avis existant
     if (error) return Response.json({ error: error.message }, { status: 500 });
   }
   return Response.json({ ok: true, imported: toSave.length, notFound: rows.length - toSave.length });

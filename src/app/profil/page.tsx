@@ -63,8 +63,8 @@ async function ProfileContent() {
       <div className="panel danger-zone" style={{ marginTop: 40 }}>
         <h2>Tes données</h2>
         <p>
-          Voir les <Link href="/confidentialite">règles de confidentialité</Link>. Tu peux effacer à tout moment tout
-          ce que Clap &amp; Play a enregistré sur toi.
+          Télécharge tout ce que Clap &amp; Play sait de toi, ou supprime ton compte à tout moment. Voir les{" "}
+          <Link href="/confidentialite">règles de confidentialité</Link>.
         </p>
         <DeleteData />
       </div>

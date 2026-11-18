@@ -30,7 +30,7 @@ export default function Conditions() {
 
       <h2>Ton compte</h2>
       <p>
-        La connexion se fait avec ton compte Google. Tu peux supprimer tes données à tout moment depuis ton profil.
+        La connexion se fait avec ton compte Google. Tu peux télécharger tes données ou supprimer ton compte à tout moment depuis ton profil.
         Voir les <Link href="/confidentialite">règles de confidentialité</Link>.
       </p>
 
