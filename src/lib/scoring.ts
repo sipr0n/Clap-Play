@@ -29,12 +29,13 @@ export type ScoreInput = {
   genres: number[];
   popularityRank: number; // 0 = le plus populaire de la recherche
   similarTo?: string | null; // titre du coup de cœur dont ce film est proche
+  sameDirector?: { name: string; title: string } | null; // même réalisateur qu'un coup de cœur
 };
 
 export type Scored = { score: number; tier: "strong" | "ok" | "none"; reasons: Reason[] };
 
 // Poids des critères (somme des maximums ≈ 10). L'avis général domine.
-export const WEIGHTS = { quality: 4, notoriety: 1.5, taste: 2, similar: 1.5, popularity: 0.5 };
+export const WEIGHTS = { quality: 4, notoriety: 1.5, taste: 2, similar: 1.5, director: 1.2, popularity: 0.5 };
 
 export function scoreFilm(f: ScoreInput, taste: Taste | null, now = new Date()): Scored {
   const reliable = reliableRating(f.rating, f.votes);
@@ -48,6 +49,7 @@ export function scoreFilm(f: ScoreInput, taste: Taste | null, now = new Date()):
     WEIGHTS.notoriety * notoriety +
     WEIGHTS.taste * clamp(affinity, -1, 1) +
     WEIGHTS.similar * (f.similarTo ? 1 : 0) +
+    WEIGHTS.director * (f.sameDirector ? 1 : 0) +
     WEIGHTS.popularity * popularity;
 
   // ---- Justifications ----
@@ -56,6 +58,12 @@ export function scoreFilm(f: ScoreInput, taste: Taste | null, now = new Date()):
   const age = now.getFullYear() - year;
 
   if (f.similarTo) reasons.push({ kind: "similar", text: `Proche de « ${f.similarTo} », un de tes coups de cœur` });
+  if (f.sameDirector) {
+    reasons.push({
+      kind: "director",
+      text: `Même réalisateur que « ${f.sameDirector.title} » : ${f.sameDirector.name}`,
+    });
+  }
 
   // Genre préféré : celui du film pour lequel l'utilisateur a le plus de coups de cœur (au moins 3).
   if (taste) {
@@ -85,7 +93,7 @@ export function scoreFilm(f: ScoreInput, taste: Taste | null, now = new Date()):
   // - solide : vraiment apprécié du public, ou raison personnelle sur un film correctement noté ;
   // - acceptable : bien noté, utilisé seulement s'il manque des films solides ;
   // - aucune : jamais proposé.
-  const personal = reasons.some((r) => r.kind === "similar" || r.kind === "taste");
+  const personal = reasons.some((r) => r.kind === "similar" || r.kind === "director" || r.kind === "taste");
   const publicStrong = reasons.some((r) => r.kind === "classic" || r.kind === "acclaimed" || r.kind === "recent") ||
     (reliable >= 6.9 && f.votes >= 1000);
   const tier: Scored["tier"] =

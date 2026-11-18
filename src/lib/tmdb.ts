@@ -38,7 +38,12 @@ export type TmdbDetails = {
   runtime: number | null;
   genres: { id: number }[];
   poster_path?: string | null;
+  imdb_id?: string | null;
+  credits?: { crew: { id: number; name: string; job: string }[] };
 };
+
+export const directorsOf = (d: TmdbDetails | null) =>
+  (d?.credits?.crew ?? []).filter((c) => c.job === "Director").map((c) => ({ id: c.id, name: c.name }));
 
 // Exécute des tâches avec un nombre limité d'appels simultanés.
 export async function mapLimit<T, R>(items: T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {

@@ -10,6 +10,7 @@ Mis à jour le 18 novembre 2026. Modèle inspiré du registre simplifié propos�
 | Préférences | Ne proposer que des films disponibles et à son goût | Exécution du service demandé | Utilisateurs inscrits | Abonnements streaming, genres à éviter | Supabase, Vercel | Oui : Vercel | Idem compte |
 | Historique et goûts | Ne plus proposer les films vus, personnaliser les propositions | Exécution du service demandé | Utilisateurs inscrits | Films vus, aimés, écartés, notes, source, dates | Supabase, Vercel | Oui : Vercel | Idem compte |
 | Import Letterboxd | Importer le journal public de l'utilisateur | Consentement (lien du compte par l'utilisateur) | Utilisateurs qui lient leur pseudo | Pseudo Letterboxd, films et notes du journal public | Supabase, Vercel ; lecture du flux public de Letterboxd | Oui : Vercel | Idem compte ; supprimé avec le compte |
+| Mesure des propositions | Améliorer l'algorithme de recommandation | Intérêt légitime | Tous les visiteurs | Aucune donnée personnelle : film, position, action, raisons affichées, styles, époque, connecté oui/non, identifiant de recherche tiré au hasard | Supabase, Vercel | Oui : Vercel | 13 mois puis suppression ou agrégation |
 
 **Mesures de sécurité :**
 - connexion uniquement via Google (pas de mot de passe stocké) ;

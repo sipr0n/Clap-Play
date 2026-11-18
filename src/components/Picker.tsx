@@ -20,11 +20,13 @@ type Feedback = "seen" | "liked" | "disliked";
 
 const REASON_ICON: Record<Reason["kind"], string> = {
   similar: "💛",
+  director: "🎬",
   taste: "🎯",
   acclaimed: "🏆",
   classic: "🎞️",
   recent: "✨",
   rated: "👍",
+  critics: "🍅",
 };
 
 // Petits utilitaires de stockage local (fonctionnent même si le navigateur bloque le stockage).
@@ -44,6 +46,20 @@ const store = {
   },
 };
 
+type TrackAction = "shown" | "trailer" | "watch" | "letterboxd" | "liked" | "seen" | "disliked";
+
+// Mesure anonyme : envoie sans bloquer la page, même si l'utilisateur quitte le site juste après.
+function sendEvents(events: object[]) {
+  if (!events.length) return;
+  const body = JSON.stringify({ events });
+  try {
+    if (navigator.sendBeacon?.("/api/events", new Blob([body], { type: "application/json" }))) return;
+  } catch {}
+  fetch("/api/events", { method: "POST", headers: { "content-type": "application/json" }, body, keepalive: true }).catch(
+    () => {},
+  );
+}
+
 export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Props) {
   const router = useRouter();
   const [prefs, setPrefs] = useState<Prefs | null>(initialPrefs);
@@ -61,6 +77,7 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
   const [toast, setToast] = useState<string | null>(null);
   const [trailer, setTrailer] = useState<{ title: string; key: string; lang: TrailerLang } | null>(null);
   const shown = useRef<Set<number>>(new Set());
+  const searchId = useRef<string>("");
   const resultsRef = useRef<HTMLDivElement>(null);
 
   // Préférences : celles du profil, sinon celles de cet appareil, sinon on les demande d'abord.
@@ -85,6 +102,22 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
   }, [toast]);
 
   const localSeen = () => store.get<number[]>("cp.seen", []);
+
+  function track(film: Film, action: TrackAction, position?: number) {
+    if (!searchId.current) return;
+    sendEvents([
+      {
+        searchId: searchId.current,
+        tmdbId: film.id,
+        position: position ?? films.findIndex((f) => f.id === film.id) + 1,
+        action,
+        reasons: film.reasons.map((r) => r.kind),
+        score: film.score,
+        moods,
+        era,
+      },
+    ]);
+  }
   const avoid = prefs?.avoidGenres ?? [];
   const moodChoices = visibleMoods(avoid);
 
@@ -122,6 +155,8 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
     try {
       const list = await fetchFilms(3, [...localSeen(), ...shown.current]);
       list.forEach((f) => shown.current.add(f.id));
+      searchId.current = crypto.randomUUID();
+      list.forEach((f, i) => track(f, "shown", i + 1));
       setFilms(list);
       setFeedback({});
       setSearched(true);
@@ -135,6 +170,7 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
 
   async function sendFeedback(film: Film, status: Feedback) {
     setFeedback((f) => ({ ...f, [film.id]: status }));
+    track(film, status);
     // « Déjà vu » ou « Pas pour moi » : on remplace le film par un autre, pendant l'enregistrement.
     const replaced = status !== "liked" ? replaceFilm(film) : Promise.resolve(true);
 
@@ -186,6 +222,7 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
       const [next] = await fetchFilms(1, [...localSeen(), ...shown.current, film.id]);
       if (next) {
         shown.current.add(next.id);
+        track(next, "shown", films.findIndex((f) => f.id === film.id) + 1);
         setFilms((list) => list.map((f) => (f.id === film.id ? next : f)));
         return true;
       }
@@ -332,7 +369,11 @@ export default function Picker({ loggedIn, accountsEnabled, initialPrefs }: Prop
                   busy={replacing === film.id}
                   status={feedback[film.id]}
                   onFeedback={(s) => sendFeedback(film, s)}
-                  onTrailer={(key, lang) => setTrailer({ title: film.title, key, lang })}
+                  onTrailer={(key, lang) => {
+                    track(film, "trailer");
+                    setTrailer({ title: film.title, key, lang });
+                  }}
+                  onLink={(action) => track(film, action)}
                 />
               ))}
             </div>
@@ -361,6 +402,7 @@ function FilmCard({
   status,
   onFeedback,
   onTrailer,
+  onLink,
 }: {
   film: Film;
   loggedIn: boolean;
@@ -369,6 +411,7 @@ function FilmCard({
   status?: Feedback;
   onFeedback: (s: Feedback) => void;
   onTrailer: (key: string, lang: TrailerLang) => void;
+  onLink: (action: "watch" | "letterboxd") => void;
 }) {
   const [trailerState, setTrailerState] = useState<"idle" | "loading" | "none">("idle");
 
@@ -440,11 +483,17 @@ function FilmCard({
             </button>
           )}
           {film.watchLink && (
-            <a className="btn btn-sm" href={film.watchLink} target="_blank" rel="noreferrer">
+            <a className="btn btn-sm" href={film.watchLink} target="_blank" rel="noreferrer" onClick={() => onLink("watch")}>
               ▶ Où regarder
             </a>
           )}
-          <a className="btn btn-teal btn-sm" href={film.letterboxdUrl} target="_blank" rel="noreferrer">
+          <a
+            className="btn btn-teal btn-sm"
+            href={film.letterboxdUrl}
+            target="_blank"
+            rel="noreferrer"
+            onClick={() => onLink("letterboxd")}
+          >
             ★ Noter sur Letterboxd
           </a>
         </div>

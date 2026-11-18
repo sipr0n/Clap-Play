@@ -81,6 +81,15 @@ export default function Confidentialite() {
         les films viennent de TMDB et JustWatch : nous ne leur envoyons aucune donnée personnelle.
       </p>
 
+      <h2>Mesure anonyme des propositions</h2>
+      <p>
+        Pour améliorer les propositions, nous enregistrons ce que deviennent les films proposés : affiché, bande-annonce
+        regardée, «&nbsp;Où regarder&nbsp;» cliqué, «&nbsp;Vu &amp; aimé&nbsp;» ou «&nbsp;Pas pour moi&nbsp;», avec les
+        raisons affichées et les styles choisis. Ces mesures sont anonymes : elles ne contiennent ni ton compte, ni ton
+        adresse, ni identifiant de ton navigateur, et ne permettent pas de te reconnaître. Elles sont supprimées
+        au bout de 13 mois.
+      </p>
+
       <h2>Cookies et vidéos</h2>
       <p>
         Le site utilise uniquement des cookies nécessaires : celui qui te garde connecté. Ils ne demandent pas de

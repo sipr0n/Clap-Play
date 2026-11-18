@@ -129,10 +129,11 @@ export type Film = {
   letterboxdUrl: string;
   similar: boolean; // proposé car proche d'un film que l'utilisateur a adoré
   reasons: Reason[]; // pourquoi ce film est proposé (toujours au moins une raison)
+  score?: number; // score de l'algorithme (sert à la mesure anonyme des propositions)
 };
 
 export type Reason = {
-  kind: "similar" | "taste" | "acclaimed" | "classic" | "recent" | "rated";
+  kind: "similar" | "director" | "taste" | "acclaimed" | "classic" | "recent" | "rated" | "critics";
   text: string;
 };
 
