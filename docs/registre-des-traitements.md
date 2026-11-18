@@ -6,7 +6,7 @@ Mis à jour le 18 novembre 2026. Modèle inspiré du registre simplifié propos�
 
 | Traitement | Finalité | Base légale | Personnes | Données | Destinataires / sous-traitants | Transfert hors UE | Conservation |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| Comptes utilisateurs | Permettre la connexion et retrouver ses préférences | Exécution du service demandé | Utilisateurs inscrits | E-mail, nom et photo Google, dates de création, de connexion et de dernière visite | Supabase (base), Google (connexion), Vercel (hébergement) | Oui : Google et Vercel (États-Unis), Data Privacy Framework ou clauses types | Tant que le compte existe ; suppression après 2 ans sans visite |
+| Comptes utilisateurs | Permettre la connexion et retrouver ses préférences | Exécution du service demandé | Utilisateurs inscrits | E-mail, nom et photo Google, dates de création, de connexion et de dernière visite | Supabase (base, Irlande, UE), Google (connexion), Vercel (hébergement) | Oui : Google et Vercel (États-Unis), Data Privacy Framework ou clauses types | Tant que le compte existe ; suppression après 2 ans sans visite |
 | Préférences | Ne proposer que des films disponibles et à son goût | Exécution du service demandé | Utilisateurs inscrits | Abonnements streaming, genres à éviter | Supabase, Vercel | Oui : Vercel | Idem compte |
 | Historique et goûts | Ne plus proposer les films vus, personnaliser les propositions | Exécution du service demandé | Utilisateurs inscrits | Films vus, aimés, écartés, notes, source, dates | Supabase, Vercel | Oui : Vercel | Idem compte |
 | Import Letterboxd | Importer le journal public de l'utilisateur | Consentement (lien du compte par l'utilisateur) | Utilisateurs qui lient leur pseudo | Pseudo Letterboxd, films et notes du journal public | Supabase, Vercel ; lecture du flux public de Letterboxd | Oui : Vercel | Idem compte ; supprimé avec le compte |
@@ -20,3 +20,5 @@ Mis à jour le 18 novembre 2026. Modèle inspiré du registre simplifié propos�
 **Droits des personnes :** export JSON et suppression du compte en libre-service depuis la page Profil ; correction et retrait des films depuis la page Historique ; contact par e-mail pour toute autre demande.
 
 **Pas de traitement :** pas de publicité, pas de profilage à des fins commerciales, pas de revente, pas de cookies autres que ceux nécessaires à la connexion. Les vidéos YouTube ne sont chargées qu'après accord.
+
+**Localisation des données :** la base Supabase est hébergée en Irlande (région AWS eu-west-1, Union européenne). Vercel (hébergement du site) et Google (connexion) peuvent traiter des données aux États-Unis.

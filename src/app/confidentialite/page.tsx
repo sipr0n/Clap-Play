@@ -66,15 +66,17 @@ export default function Confidentialite() {
           <strong>Vercel Inc.</strong> (États-Unis) : héberge le site.
         </li>
         <li>
-          <strong>Supabase Inc.</strong> : héberge les comptes et la base de données, protégée pour que chaque
-          utilisateur n&apos;accède qu&apos;à ses propres données.
+          <strong>Supabase Inc.</strong> : héberge les comptes et la base de données sur des serveurs situés en
+          Irlande (Union européenne). La base est protégée pour que chaque utilisateur n&apos;accède qu&apos;à ses
+          propres données.
         </li>
         <li>
           <strong>Google</strong> (États-Unis) : gère la connexion avec ton compte Google.
         </li>
       </ul>
       <p>
-        Les transferts vers les États-Unis sont encadrés par le cadre de protection des données UE–États-Unis (Data
+        Tes données sont donc stockées dans l&apos;Union européenne. Les transferts vers les États-Unis (hébergement
+        du site et connexion Google) sont encadrés par le cadre de protection des données UE–États-Unis (Data
         Privacy Framework) ou par les clauses contractuelles types de la Commission européenne. Les informations sur
         les films viennent de TMDB et JustWatch : nous ne leur envoyons aucune donnée personnelle.
       </p>
