@@ -261,3 +261,8 @@ button:disabled { cursor: not-allowed; opacity: 0.55; }
   .nav { gap: 4px; }
   .nav .btn-sm { padding: 6px 10px; }
 }
+
+/* ---------- Pourquoi ce film ? ---------- */
+.why { background: var(--yellow-soft); border: 1px solid rgba(252, 248, 63, 0.25); border-radius: 10px; padding: 10px 12px; }
+.why-title { display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--yellow); margin-bottom: 4px; }
+.why ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 3px; font-size: 0.86rem; }

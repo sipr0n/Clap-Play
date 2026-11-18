@@ -6,7 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Logo from "@/components/Logo";
 import TrailerModal from "@/components/TrailerModal";
-import { AVOIDABLE_GENRES, ERAS, Film, MAX_MOODS, MOODS, PROVIDERS, TIMES, visibleMoods } from "@/lib/options";
+import { AVOIDABLE_GENRES, ERAS, Film, MAX_MOODS, MOODS, PROVIDERS, type Reason, TIMES, visibleMoods } from "@/lib/options";
 import type { Prefs } from "@/lib/prefs";
 import { readLocalPrefs } from "@/lib/localPrefs";
 
@@ -17,6 +17,15 @@ type Props = {
 };
 
 type Feedback = "seen" | "liked" | "disliked";
+
+const REASON_ICON: Record<Reason["kind"], string> = {
+  similar: "💛",
+  taste: "🎯",
+  acclaimed: "🏆",
+  classic: "🎞️",
+  recent: "✨",
+  rated: "👍",
+};
 
 // Petits utilitaires de stockage local (fonctionnent même si le navigateur bloque le stockage).
 const store = {
@@ -400,7 +409,18 @@ function FilmCard({
             <span className="star">★</span> {film.rating.toFixed(1)}/10
           </span>
         </div>
-        {film.similar && <span className="badge" style={{ alignSelf: "flex-start" }}>Proche de tes coups de cœur</span>}
+        {film.reasons.length > 0 && (
+          <div className="why">
+            <span className="why-title">Pourquoi ce film ?</span>
+            <ul>
+              {film.reasons.map((r) => (
+                <li key={r.text}>
+                  <span aria-hidden="true">{REASON_ICON[r.kind]}</span> {r.text}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {film.overview && <p className="overview">{film.overview}</p>}
         {film.providers.length > 0 && (
           <div className="providers">

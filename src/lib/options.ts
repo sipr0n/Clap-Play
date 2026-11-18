@@ -128,6 +128,34 @@ export type Film = {
   watchLink: string | null;
   letterboxdUrl: string;
   similar: boolean; // proposé car proche d'un film que l'utilisateur a adoré
+  reasons: Reason[]; // pourquoi ce film est proposé (toujours au moins une raison)
+};
+
+export type Reason = {
+  kind: "similar" | "taste" | "acclaimed" | "classic" | "recent" | "rated";
+  text: string;
+};
+
+// Noms des genres TMDB, au pluriel pour les justifications (« Tu as aimé 12 comédies »).
+export const GENRE_PLURAL: Record<number, string> = {
+  28: "films d'action",
+  12: "films d'aventure",
+  16: "films d'animation",
+  35: "comédies",
+  80: "films policiers",
+  99: "documentaires",
+  18: "drames",
+  10751: "films familiaux",
+  14: "films fantastiques",
+  36: "films historiques",
+  27: "films d'horreur",
+  10402: "films musicaux",
+  9648: "films à mystère",
+  10749: "films romantiques",
+  878: "films de science-fiction",
+  53: "thrillers",
+  10752: "films de guerre",
+  37: "westerns",
 };
 
 export function letterboxdUrl(tmdbId: number) {

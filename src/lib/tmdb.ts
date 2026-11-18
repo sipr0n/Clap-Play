@@ -24,6 +24,8 @@ export type TmdbMovie = {
   title: string;
   release_date?: string;
   vote_average: number;
+  vote_count?: number;
+  popularity?: number;
   overview: string;
   poster_path: string | null;
   genre_ids?: number[];

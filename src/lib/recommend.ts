@@ -1,6 +1,7 @@
 import { DEMO_FILMS } from "./demo";
 import { Film, MOODS, PROVIDERS, TIMES, WATCH_REGION, eraRange, inEra, letterboxdUrl } from "./options";
-import { Taste, genreAffinity } from "./taste";
+import type { Taste } from "./taste";
+import { type Scored, pickJustified, scoreFilm } from "./scoring";
 import { POSTER, TmdbDetails, TmdbMovie, hasTmdb, tmdb } from "./tmdb";
 
 export type RecommendParams = {
@@ -29,7 +30,7 @@ function providerNames(ids: number[]) {
   return PROVIDERS.filter((p) => ids.includes(p.id)).map((p) => p.name);
 }
 
-type Candidate = TmdbMovie & { score: number; similar: boolean };
+type Candidate = TmdbMovie & { similarTo: string | null; popularityRank: number; scored: Scored };
 
 // Pour chaque style choisi, ses genres (sans les genres exclus). Un style entièrement exclu est ignoré.
 export function genreGroups(moodIds: string[], avoid: number[]): number[][] {
@@ -55,15 +56,6 @@ export function genreQueries(groups: number[][]): string[] {
   return pairs.length ? pairs : [a.join("|")];
 }
 
-// Choisit les meilleurs candidats, avec une part de hasard pour varier.
-function pick(cands: Candidate[], count: number): Candidate[] {
-  return cands
-    .map((c) => ({ c, s: c.score + Math.random() * 1.2 }))
-    .sort((a, b) => b.s - a.s)
-    .slice(0, count)
-    .map((x) => x.c);
-}
-
 // ---------- Catalogue réel (TMDB) ----------
 
 type DiscoverResponse = { total_pages: number; results: TmdbMovie[] };
@@ -85,6 +77,7 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
   const avoid = p.avoidGenres ?? [];
   const groups = genreGroups(p.moodIds, avoid);
   const excluded = new Set([...(p.exclude ?? []), ...(taste?.seen ?? []), ...(taste?.disliked ?? [])]);
+  const mixed = groups.length > 1;
 
   const params: Record<string, string> = {
     language: "fr-FR",
@@ -94,7 +87,6 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
     "vote_count.gte": "300",
     "vote_average.gte": "6.3",
     "with_runtime.gte": "60",
-    sort_by: "popularity.desc",
   };
   if (avoid.length) params.without_genres = avoid.join(",");
   if (time.maxRuntime) params["with_runtime.lte"] = String(time.maxRuntime);
@@ -102,75 +94,100 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
   if (era.from) params["primary_release_date.gte"] = era.from;
   if (era.to) params["primary_release_date.lte"] = era.to;
   if (p.eraId === "recent") params["vote_count.gte"] = "100"; // les films récents ont encore peu de votes
-  if (groups.length > 1) params["vote_count.gte"] = String(Math.min(Number(params["vote_count.gte"]), 150)); // mélanges plus rares
+  if (mixed) params["vote_count.gte"] = String(Math.min(Number(params["vote_count.gte"]), 150)); // mélanges plus rares
+  // Liste « mieux notés » : seulement des films avec beaucoup d'avis, pour que la note soit fiable.
+  const acclaimedVotes = p.eraId === "recent" ? "300" : mixed ? "500" : "1500";
 
-  // 1) Films du catalogue qui collent aux styles, à la durée, à l'époque et aux abonnements.
-  //    Pour chaque requête de genres : la 1re page + une page au hasard, pour varier.
+  // 1) Pour chaque requête de genres, deux listes : les plus populaires (1re page + une page au hasard)
+  //    et les mieux notés par le public.
   const lists = await Promise.all(
     genreQueries(groups).map(async (withGenres) => {
       const q = withGenres ? { ...params, with_genres: withGenres } : params;
-      const first = await tmdb<DiscoverResponse>("/discover/movie", { ...q, page: "1" });
-      const maxPage = Math.min(first.total_pages, 8);
-      if (maxPage < 2) return first.results;
-      const page = 2 + Math.floor(Math.random() * (maxPage - 1));
-      const other = await tmdb<DiscoverResponse>("/discover/movie", { ...q, page: String(page) }).catch(() => null);
-      return [...first.results, ...(other?.results ?? [])];
+      const [popular, acclaimed] = await Promise.all([
+        tmdb<DiscoverResponse>("/discover/movie", { ...q, sort_by: "popularity.desc", page: "1" }),
+        tmdb<DiscoverResponse>("/discover/movie", {
+          ...q,
+          sort_by: "vote_average.desc",
+          "vote_count.gte": acclaimedVotes,
+          page: "1",
+        }).catch(() => null),
+      ]);
+      const maxPage = Math.min(popular.total_pages, 6);
+      const more =
+        maxPage >= 2
+          ? await tmdb<DiscoverResponse>("/discover/movie", {
+              ...q,
+              sort_by: "popularity.desc",
+              page: String(2 + Math.floor(Math.random() * (maxPage - 1))),
+            }).catch(() => null)
+          : null;
+      return [
+        ...popular.results.map((m, i) => ({ m, rank: i })),
+        ...(more?.results ?? []).map((m, i) => ({ m, rank: 20 + i })),
+        ...(acclaimed?.results ?? []).map((m, i) => ({ m, rank: 15 + i })),
+      ];
     }),
   );
 
   const byId = new Map<number, Candidate>();
-  for (const list of lists) {
-    for (const [i, m] of list.entries()) {
-      if (excluded.has(m.id) || byId.has(m.id)) continue;
-      if (!matchesGenres(m.genre_ids ?? [], groups, avoid)) continue;
-      const popularity = 1 - i / 40; // les plus populaires gagnent un petit bonus
-      byId.set(m.id, {
-        ...m,
-        score: popularity + m.vote_average / 5 + 2 * genreAffinity(taste, m.genre_ids ?? []),
-        similar: false,
-      });
-    }
-  }
+  const add = (m: TmdbMovie, rank: number, similarTo: string | null) => {
+    if (excluded.has(m.id) || !matchesGenres(m.genre_ids ?? [], groups, avoid)) return;
+    const prev = byId.get(m.id);
+    const popularityRank = Math.min(rank, prev?.popularityRank ?? rank);
+    const sim = similarTo ?? prev?.similarTo ?? null;
+    const scored = scoreFilm(
+      {
+        id: m.id,
+        rating: m.vote_average,
+        votes: m.vote_count ?? 0,
+        year: Number(m.release_date?.slice(0, 4)) || null,
+        genres: m.genre_ids ?? [],
+        popularityRank,
+        similarTo: sim,
+      },
+      taste,
+    );
+    byId.set(m.id, { ...m, similarTo: sim, popularityRank, scored });
+  };
+  for (const list of lists) for (const { m, rank } of list) add(m, rank, null);
 
-  // 2) Si l'utilisateur est connecté : films « similaires » à ceux qu'il a adorés.
+  // 2) Si l'utilisateur est connecté : films proches de ses coups de cœur.
   if (taste && taste.favorites.length > 0) {
-    const seeds = shuffle(taste.favorites).slice(0, 2);
+    const seeds = shuffle(taste.favorites).slice(0, 3);
     const recos = await Promise.all(
       seeds.map((id) =>
-        tmdb<DiscoverResponse>(`/movie/${id}/recommendations`, { language: "fr-FR" }).catch(() => null),
+        tmdb<DiscoverResponse>(`/movie/${id}/recommendations`, { language: "fr-FR" })
+          .then((r) => r.results.map((m) => ({ m, seed: taste.favoriteTitles.get(id) ?? null })))
+          .catch(() => []),
       ),
     );
     const similar = recos
-      .flatMap((r) => r?.results ?? [])
+      .flat()
       .filter(
-        (m) =>
+        ({ m }) =>
           !excluded.has(m.id) &&
           matchesGenres(m.genre_ids ?? [], groups, avoid) &&
           inEra(p.eraId ?? "tous", m.release_date?.slice(0, 4)) &&
-          m.vote_average >= 6.3,
+          (m.vote_count ?? 0) >= 300,
       );
-    // On vérifie la durée et la disponibilité sur les abonnements pour quelques-uns.
+    // Les recommandations TMDB ne savent pas filtrer par plateforme ni par durée : on vérifie les meilleures.
+    const toCheck = shuffle(similar).slice(0, 8);
     const checked = await Promise.all(
-      shuffle(similar)
-        .slice(0, 6)
-        .map(async (m) => {
-          const [details, av] = await Promise.all([
-            tmdb<TmdbDetails>(`/movie/${m.id}`).catch(() => null),
-            availability(m.id, p.providerIds),
-          ]);
-          const okTime = !time.maxRuntime || (details?.runtime ?? 999) <= time.maxRuntime;
-          return okTime && av.ids.length > 0 ? m : null;
-        }),
+      toCheck.map(async ({ m, seed }) => {
+        const [details, av] = await Promise.all([
+          tmdb<TmdbDetails>(`/movie/${m.id}`).catch(() => null),
+          availability(m.id, p.providerIds),
+        ]);
+        const okTime =
+          (!time.maxRuntime || (details?.runtime ?? 999) <= time.maxRuntime) && (details?.runtime ?? 0) >= 60;
+        return okTime && av.ids.length > 0 ? { m, seed } : null;
+      }),
     );
-    for (const m of checked) {
-      if (!m) continue;
-      const existing = byId.get(m.id);
-      const score = 2.5 + m.vote_average / 5 + 2 * genreAffinity(taste, m.genre_ids ?? []);
-      byId.set(m.id, { ...m, score: Math.max(score, existing?.score ?? 0) + 1, similar: true });
-    }
+    for (const c of checked) if (c) add(c.m, 30, c.seed);
   }
 
-  const picks = pick([...byId.values()], count);
+  // 3) Seuls les films justifiés sont proposés, les mieux classés ayant le plus de chances.
+  const picks = pickJustified([...byId.values()], count);
 
   return Promise.all(
     picks.map(async (f) => {
@@ -190,7 +207,8 @@ async function recommendFromTmdb(p: RecommendParams): Promise<Film[]> {
         providers: providerNames(av.ids),
         watchLink: av.link,
         letterboxdUrl: letterboxdUrl(f.id),
-        similar: f.similar,
+        similar: Boolean(f.similarTo),
+        reasons: f.scored.reasons,
       } satisfies Film;
     }),
   );
@@ -205,41 +223,34 @@ function recommendFromDemo(p: RecommendParams): Film[] {
   const taste = p.taste ?? null;
   const excluded = new Set([...(p.exclude ?? []), ...(taste?.seen ?? []), ...(taste?.disliked ?? [])]);
 
-  const cands: Candidate[] = DEMO_FILMS.filter(
+  const cands = DEMO_FILMS.filter(
     (f) =>
       matchesGenres(f.genres, groups, avoid) &&
       (time.maxRuntime === null || f.runtime <= time.maxRuntime) &&
       inEra(p.eraId ?? "tous", f.year) &&
       f.providers.some((id) => p.providerIds.includes(id)) &&
       !excluded.has(f.id),
-  ).map((f) => ({
-    id: f.id,
-    title: f.title,
-    vote_average: f.rating,
-    overview: f.overview,
-    poster_path: null,
-    genre_ids: f.genres,
-    score: f.rating / 5 + 2 * genreAffinity(taste, f.genres),
-    similar: false,
+  ).map((f, i) => ({
+    f,
+    // Le catalogue de démo n'a pas le nombre de votes : on suppose des films connus.
+    scored: scoreFilm({ id: f.id, rating: f.rating, votes: 20000, year: Number(f.year), genres: f.genres, popularityRank: i }, taste),
   }));
 
-  return pick(cands, p.count ?? 3).map((c) => {
-    const f = DEMO_FILMS.find((d) => d.id === c.id)!;
-    return {
-      id: f.id,
-      title: f.title,
-      year: f.year,
-      runtime: f.runtime,
-      rating: f.rating,
-      overview: f.overview,
-      poster: null,
-      genres: f.genres,
-      providers: providerNames(f.providers.filter((id) => p.providerIds.includes(id))),
-      watchLink: null,
-      letterboxdUrl: letterboxdUrl(f.id),
-      similar: false,
-    };
-  });
+  return pickJustified(cands, p.count ?? 3).map(({ f, scored }) => ({
+    id: f.id,
+    title: f.title,
+    year: f.year,
+    runtime: f.runtime,
+    rating: f.rating,
+    overview: f.overview,
+    poster: null,
+    genres: f.genres,
+    providers: providerNames(f.providers.filter((id) => p.providerIds.includes(id))),
+    watchLink: null,
+    letterboxdUrl: letterboxdUrl(f.id),
+    similar: false,
+    reasons: scored.reasons,
+  }));
 }
 
 export async function recommend(p: RecommendParams): Promise<RecommendResult> {

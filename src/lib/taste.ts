@@ -12,7 +12,9 @@ export type Taste = {
   seen: Set<number>;
   disliked: Set<number>;
   genreScore: Map<number, number>; // >0 : genre apprécié, <0 : genre moins aimé
+  genreLiked: Map<number, number>; // nombre de coups de cœur par genre (sert aux justifications)
   favorites: number[]; // films les mieux notés / aimés
+  favoriteTitles: Map<number, string>; // titre de chaque coup de cœur (pour « Parce que tu as aimé… »)
 };
 
 // Note « ressentie » entre -1 (détesté) et +1 (adoré).
@@ -35,15 +37,18 @@ export function buildTaste(events: FilmEvent[]): Taste {
   }
   for (const [g, s] of genreScore) genreScore.set(g, s / Math.sqrt(genreCount.get(g)!));
 
-  const favorites = events
-    .filter((e) => feeling(e) >= 0.75)
-    .map((e) => e.tmdb_id);
+  const loved = events.filter((e) => feeling(e) >= 0.75);
+  const favorites = loved.map((e) => e.tmdb_id);
+  const genreLiked = new Map<number, number>();
+  for (const e of loved) for (const g of e.genres) genreLiked.set(g, (genreLiked.get(g) ?? 0) + 1);
 
   return {
     seen: new Set(events.filter((e) => e.status !== "disliked").map((e) => e.tmdb_id)),
     disliked: new Set(events.filter((e) => e.status === "disliked").map((e) => e.tmdb_id)),
     genreScore,
+    genreLiked,
     favorites,
+    favoriteTitles: new Map(loved.map((e) => [e.tmdb_id, e.title])),
   };
 }
 
